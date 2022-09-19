@@ -1,1 +1,0 @@
-from src.swin_transformer import SwinTransformer

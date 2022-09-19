@@ -280,7 +280,9 @@ class SwinTransformer(nn.Module):
                  window_size=7,
                  num_heads=[3, 6, 12, 24],
                  depths=[2, 2, 6, 2],
-                 num_classes=1000):
+                 num_classes=1000,
+                 output_hidden_states=False
+                ):
         super(SwinTransformer, self).__init__()
         self.num_class = num_classes
         self.depths = depths
@@ -292,6 +294,7 @@ class SwinTransformer(nn.Module):
 
         self.patch_embedding = PatchEmbedding(patch_size=patch_size, embed_dim=embed_dim)
         self.stages = nn.ModuleList()
+        self.output_hidden_states = output_hidden_states
 
         for idx, (depth, n_heads) in enumerate(zip(self.depths, self.num_heads)):
             h, w = self.patch_resolution
@@ -302,7 +305,7 @@ class SwinTransformer(nn.Module):
                               window_size=window_size,
                               patch_merging=PatchMerging if (idx < self.num_stages-1) else None)
             self.stages.append(stage)
-
+        self.window_size = window_size
         self.norm = nn.LayerNorm(self.num_features)
         self.avgpool = nn.AdaptiveAvgPool1d(1)  # last diemnsion will be shrinked to 1
         self.fc = nn.Linear(self.num_features, num_classes)
@@ -314,6 +317,16 @@ class SwinTransformer(nn.Module):
             x = stage(x)
 
         x = self.norm(x)
+
+        if self.output_hidden_states:
+            x = rearrange(
+                x,
+                "b (win_size_h win_size_w) embed_dim -> b embed_dim win_size_h win_size_w", 
+                win_size_h=self.window_size, 
+                win_size_w =self.window_size
+            )
+            return x
+
         x = rearrange(x, "b num_windows embed_dim -> b embed_dim num_windows")
         x = self.avgpool(x)
         x = rearrange(x, "b embed_dim c -> b (embed_dim c)")    # c = 1 due to avgpool
@@ -333,7 +346,7 @@ if __name__ == "__main__":
     # out = shifted_swin_block(out)   # result: [4, 56*56, 96]
     # out = patch_merging(out)        # result: [4, 784, 192], here 56*56 / 4 = 784
     # # 784 = 28*28 is considered as new number of windows
-    swin = SwinTransformer()
+    swin = SwinTransformer(output_hidden_states=True)
     out = swin(t)
 
     print(out.shape)
