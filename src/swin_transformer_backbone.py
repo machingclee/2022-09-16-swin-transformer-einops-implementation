@@ -11,6 +11,11 @@ class Backbone(nn.Module):
         self.model = models.swin_t(weights="DEFAULT")
         self.features = self.model.features
         self.norm = self.model.norm
+        self.freeze_params()
+
+    def freeze_params(self):
+        for param in self.model.parameters():
+            param.requires_grad = False
 
     def forward(self, x):
         x = self.features(x)
